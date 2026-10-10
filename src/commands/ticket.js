@@ -1,8 +1,6 @@
 const { SlashCommandBuilder, MessageFlags, InteractionContextType } = require('discord.js');
 const embeds = require('../utils/embeds');
-const { getGuildConfig } = require('../services/guildConfig');
-const { findOpenTicket, closeWithCountdown, canManage, claimTicket } = require('../services/tickets');
-const { requireStaff } = require('../utils/permissions');
+const { findOpenTicket, closeWithCountdown, canManage, canHandle, claimTicket } = require('../services/tickets');
 const { slug } = require('../utils/format');
 
 const MEMBER_PERMS = {
@@ -55,8 +53,7 @@ async function execute(interaction) {
     return closeWithCountdown(interaction, ticket, interaction.options.getString('reason'));
   }
 
-  const cfg = await getGuildConfig(interaction.guildId);
-  if (!(await requireStaff(interaction, cfg))) return;
+  if (!(await canHandle(interaction, ticket))) return fail('Only store staff or the seller of this ticket can use this command.');
 
   if (sub === 'claim') {
     const problem = await claimTicket(interaction, ticket);

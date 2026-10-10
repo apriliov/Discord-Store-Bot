@@ -2,6 +2,7 @@ const { Schema, model } = require('mongoose');
 
 const productSchema = new Schema({
   guildId: { type: String, required: true, index: true },
+  sellerId: { type: String, default: null, index: true }, // Discord user ID of the seller, null = sold by the store itself
   number: { type: Number, required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true, min: 0 },

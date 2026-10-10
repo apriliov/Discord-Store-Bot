@@ -6,6 +6,7 @@ const ticketSchema = new Schema({
   number: { type: Number, required: true },
   userId: { type: String, required: true },
   userTag: { type: String, default: 'unknown' },
+  sellerId: { type: String, default: null }, // seller of the ordered product (can handle this ticket)
   subject: { type: String, default: 'Order' },
   productId: { type: String, default: null },
   productName: { type: String, default: null },

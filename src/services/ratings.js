@@ -14,6 +14,7 @@ const Rating = require('../database/models/Rating');
 const Ticket = require('../database/models/Ticket');
 const { getGuildConfig } = require('./guildConfig');
 const { truncate, stars, pad } = require('../utils/format');
+const { sellerForTicket } = require('./sellers');
 
 const STAR_LABELS = { 1: 'Very bad', 2: 'Bad', 3: 'Okay', 4: 'Good', 5: 'Excellent' };
 
@@ -22,15 +23,16 @@ function ratingEmbed({ user, rating, product }) {
     .setColor(rating.stars >= 4 ? config.colors.success : rating.stars === 3 ? config.colors.warn : config.colors.error)
     .setAuthor({ name: user.username, iconURL: user.displayAvatarURL() })
     .setTitle(`${stars(rating.stars)}  ${rating.stars}/5 - ${STAR_LABELS[rating.stars]}`)
-    .addFields({ name: 'Rated', value: product || 'The store', inline: true }, { name: 'By', value: `<@${user.id}>`, inline: true })
+    .addFields({ name: 'Rated', value: product || (rating.sellerId ? 'The seller' : 'The store'), inline: true }, { name: 'By', value: `<@${user.id}>`, inline: true })
     .setTimestamp();
+  if (rating.sellerId) embed.addFields({ name: 'Seller', value: `<@${rating.sellerId}>`, inline: true });
   if (rating.comment) embed.setDescription(`>>> ${truncate(rating.comment, 1500)}`);
   return embed;
 }
 
 // Saves a rating and posts it to the rating channel (if one is configured).
-async function saveRating(client, guildId, user, { stars: value, comment = '', product = null, ticketId = null, source = 'command' }) {
-  const rating = await Rating.create({ guildId, userId: user.id, stars: value, comment, product, ticketId, source });
+async function saveRating(client, guildId, user, { stars: value, comment = '', product = null, sellerId = null, ticketId = null, source = 'command' }) {
+  const rating = await Rating.create({ guildId, userId: user.id, sellerId, stars: value, comment, product, ticketId, source });
   const cfg = await getGuildConfig(guildId);
   if (cfg.ratingChannelId) {
     const channel = await client.channels.fetch(cfg.ratingChannelId).catch(() => null);
@@ -95,10 +97,12 @@ async function handleInteraction(client, interaction) {
     if (!claimed) return respond({ embeds: [embeds.info('You already rated this ticket. Thank you! 💛')], components: [] });
 
     const comment = interaction.fields.getTextInputValue('comment').trim();
+    const ticketSeller = await sellerForTicket(ticket);
     await saveRating(client, ticket.guildId, interaction.user, {
       stars: value,
       comment,
       product: ticket.productName,
+      sellerId: ticketSeller && ticketSeller !== interaction.user.id ? ticketSeller : null,
       ticketId: String(ticket._id),
       source: 'ticket',
     });

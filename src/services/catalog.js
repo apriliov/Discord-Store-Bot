@@ -48,6 +48,7 @@ async function buildCatalogPage(guildId, page = 0, category = ALL) {
       value:
         `💰 **${money(cfg, p.price)}**  •  📦 ${stockText(p.stock)}\n` +
         `🏷️ ${truncate(p.category, 50)}` +
+        (p.sellerId ? `  •  🧑‍💼 <@${p.sellerId}>` : '') +
         (p.description ? `\n${truncate(p.description, 120)}` : ''),
     });
   }
@@ -91,6 +92,7 @@ async function buildProductDetail(guildId, number) {
       { name: '🏷️ Category', value: truncate(p.category, 100), inline: true }
     )
     .setFooter({ text: `Product #${p.number}` });
+  if (p.sellerId) embed.addFields({ name: '🧑‍💼 Seller', value: `<@${p.sellerId}>  •  \`/seller info\``, inline: true });
   if (p.imageUrl && embeds.isHttpUrl(p.imageUrl)) embed.setImage(p.imageUrl);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`ct:order:${p.number}`).setLabel('Order Now').setEmoji('🛒').setStyle(ButtonStyle.Success).setDisabled(p.stock === 0)

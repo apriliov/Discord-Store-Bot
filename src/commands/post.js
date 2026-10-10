@@ -1,14 +1,16 @@
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, PermissionFlagsBits, MessageFlags, InteractionContextType } = require('discord.js');
 const config = require('../config');
 const embeds = require('../utils/embeds');
-const { getGuildConfig } = require('../services/guildConfig');
-const { isAdmin, requireStaff, checkCanPost, TEXT_CHANNEL_TYPES } = require('../utils/permissions');
+const { getGuildConfig, nextCounter } = require('../services/guildConfig');
+const Announcement = require('../database/models/Announcement');
+const { isAdmin, checkCanPost, TEXT_CHANNEL_TYPES } = require('../utils/permissions');
+const { getActor } = require('../services/sellers');
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const data = new SlashCommandBuilder()
   .setName('post')
-  .setDescription('Post an announcement embed in a channel (staff)')
+  .setDescription('Post an announcement embed in a channel (staff and sellers)')
   .setContexts(InteractionContextType.Guild)
   .addChannelOption((o) => o.setName('channel').setDescription('Channel to post in').addChannelTypes(...TEXT_CHANNEL_TYPES).setRequired(true))
   .addStringOption((o) => o.setName('message').setDescription('The text to post (write \\n for a new line)').setRequired(true).setMaxLength(4000))
@@ -19,8 +21,9 @@ const data = new SlashCommandBuilder()
 
 async function execute(interaction) {
   const cfg = await getGuildConfig(interaction.guildId);
-  if (!(await requireStaff(interaction, cfg))) return;
   const fail = (text) => interaction.reply({ embeds: [embeds.error(text)], flags: MessageFlags.Ephemeral });
+  const actor = await getActor(interaction, cfg);
+  if (!actor.staff && !actor.seller) return fail('Only store staff and sellers can use this command.');
 
   const channel = interaction.options.getChannel('channel');
   const problem = checkCanPost(interaction.guild, channel);
@@ -46,6 +49,8 @@ async function execute(interaction) {
     .setDescription(interaction.options.getString('message').replace(/\\n/g, '\n'));
   const title = interaction.options.getString('title');
   if (title) embed.setTitle(title);
+  // Posts made by a seller (not staff) show who posted them, so buyers know which shop it is from.
+  if (!actor.staff && actor.seller) embed.setFooter({ text: `Posted by ${actor.seller.displayName || interaction.user.username}` });
 
   const files = [];
   if (image) {
@@ -65,7 +70,9 @@ async function execute(interaction) {
 
   try {
     const sent = await channel.send({ embeds: [embed], files, allowedMentions: { parse: [] } });
-    return interaction.editReply({ embeds: [embeds.success(`Posted in ${channel}: ${sent.url}`)] });
+    const number = await nextCounter(interaction.guildId, 'announcementCounter');
+    await Announcement.create({ guildId: interaction.guildId, number, authorId: interaction.user.id, channelId: channel.id, messageId: sent.id, title: title || null });
+    return interaction.editReply({ embeds: [embeds.success(`Posted in ${channel}: ${sent.url}\nPost number: **#${number}**. Use \`/announcement edit\` or \`/announcement delete\` to change it later.`)] });
   } catch (err) {
     console.warn('[POST] Could not post:', err.message);
     return interaction.editReply({ embeds: [embeds.error(`I could not post in ${channel}. Please check my permissions there.`)] });

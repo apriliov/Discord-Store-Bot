@@ -33,6 +33,7 @@ const guildConfigSchema = new Schema({
 
   productCounter: { type: Number, default: 0 },
   testimonialCounter: { type: Number, default: 0 },
+  announcementCounter: { type: Number, default: 0 },
 });
 
 module.exports = model('GuildConfig', guildConfigSchema);

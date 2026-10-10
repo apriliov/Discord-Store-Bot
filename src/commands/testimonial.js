@@ -1,11 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags, InteractionContextType } = require('discord.js');
 const config = require('../config');
 const embeds = require('../utils/embeds');
-const Product = require('../database/models/Product');
 const Testimonial = require('../database/models/Testimonial');
 const { getGuildConfig, nextCounter } = require('../services/guildConfig');
 const { isAdmin, isStaff } = require('../utils/permissions');
 const { truncate, pad } = require('../utils/format');
+const { resolveSellerForItem, productChoices } = require('../services/sellers');
 
 const COOLDOWN_MS = 10 * 60 * 1000;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -21,6 +21,7 @@ const data = new SlashCommandBuilder()
       .addStringOption((o) => o.setName('product').setDescription('What did you buy?').setRequired(true).setMaxLength(80).setAutocomplete(true))
       .addStringOption((o) => o.setName('message').setDescription('Tell us about your experience').setRequired(true).setMinLength(5).setMaxLength(1000))
       .addAttachmentOption((o) => o.setName('image').setDescription('Optional proof or screenshot'))
+      .addUserOption((o) => o.setName('seller').setDescription('The seller you bought from (needed if several sellers sell the same product)'))
   )
   .addSubcommand((s) =>
     s
@@ -30,11 +31,7 @@ const data = new SlashCommandBuilder()
   );
 
 async function autocomplete(interaction) {
-  const typed = String(interaction.options.getFocused()).toLowerCase();
-  const products = await Product.find({ guildId: interaction.guildId }).sort({ number: 1 }).limit(200).lean();
-  return interaction.respond(
-    products.filter((p) => p.name.toLowerCase().includes(typed)).slice(0, 25).map((p) => ({ name: truncate(p.name, 100), value: truncate(p.name, 80) }))
-  );
+  return interaction.respond(await productChoices(interaction.guildId, interaction.options.getFocused()));
 }
 
 async function execute(interaction) {
@@ -69,6 +66,12 @@ async function execute(interaction) {
   const recent = await Testimonial.findOne({ guildId: interaction.guildId, userId: interaction.user.id, createdAt: { $gt: new Date(Date.now() - COOLDOWN_MS) } }).lean();
   if (recent) return fail('You posted a testimonial a moment ago. Please wait a few minutes before posting another one.');
 
+  const productInput = interaction.options.getString('product');
+  const target = await resolveSellerForItem(interaction.guildId, productInput, interaction.options.getUser('seller'));
+  if (target.error) return fail(target.error);
+  const sellerId = target.sellerId;
+  if (sellerId && sellerId === interaction.user.id) return fail('You cannot post a testimonial about yourself.');
+
   const image = interaction.options.getAttachment('image');
   if (image && !(image.contentType || '').startsWith('image/')) return fail('The attachment must be an image (png, jpg, gif, webp).');
   if (image && image.size > MAX_IMAGE_BYTES) return fail('The image is too large. Max size is 8 MB.');
@@ -85,6 +88,7 @@ async function execute(interaction) {
     .setTitle('💬 New Testimonial')
     .setDescription(`>>> ${message}`)
     .addFields({ name: '🛍️ Product', value: truncate(product, 200), inline: true }, { name: '👤 Customer', value: `${interaction.user}`, inline: true })
+    .addFields(...(sellerId ? [{ name: '🧑‍💼 Seller', value: `<@${sellerId}>`, inline: true }] : []))
     .setFooter({ text: `Testimonial #${pad(number)} • ${cfg.storeName || config.storeName}` })
     .setTimestamp();
 
@@ -110,7 +114,7 @@ async function execute(interaction) {
     return interaction.editReply({ embeds: [embeds.error('I could not post in the testimonial channel. Please tell an admin to check my permissions there.')] });
   }
 
-  await Testimonial.create({ guildId: interaction.guildId, number, userId: interaction.user.id, product, message, messageId: posted.id, channelId: channel.id });
+  await Testimonial.create({ guildId: interaction.guildId, number, userId: interaction.user.id, sellerId, product, message, messageId: posted.id, channelId: channel.id });
   await posted.react('💛').catch(() => {});
   return interaction.editReply({ embeds: [embeds.success(`Thank you! Your testimonial was posted in ${channel}.`)] });
 }

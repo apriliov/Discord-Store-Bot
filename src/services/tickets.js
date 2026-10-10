@@ -58,6 +58,7 @@ function ticketEmbed(ticket, cfg, product, claimedTag) {
         'A staff member will be with you shortly. Please share any extra details while you wait.'
     )
     .addFields({ name: 'Subject', value: truncate(ticket.subject, 1000), inline: true });
+  if (ticket.sellerId) embed.addFields({ name: 'Seller', value: `<@${ticket.sellerId}>`, inline: true });
 
   if (product) {
     embed.addFields(
@@ -122,6 +123,13 @@ async function createTicket(interaction, { subject, details = null, product = nu
     throw new TicketError(`You already have an open ticket: <#${stillOpen[0].channelId}>. Please use it or close it first.`);
   }
 
+  // The seller of the product can see and handle the ticket (not when they are the buyer themselves).
+  let sellerId = null;
+  if (product && product.sellerId && product.sellerId !== interaction.user.id) {
+    const sellerMember = await guild.members.fetch(product.sellerId).catch(() => null);
+    if (sellerMember) sellerId = sellerMember.id;
+  }
+
   const number = await nextCounter(guild.id, 'ticketCounter');
   let channel;
   try {
@@ -134,6 +142,7 @@ async function createTicket(interaction, { subject, details = null, product = nu
         { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
         { id: interaction.user.id, allow: MEMBER_PERMS },
         { id: cfg.staffRoleId, allow: [...MEMBER_PERMS, PermissionFlagsBits.ManageMessages] },
+        ...(sellerId ? [{ id: sellerId, allow: [...MEMBER_PERMS, PermissionFlagsBits.ManageMessages] }] : []),
         { id: guild.members.me.id, allow: BOT_PERMS },
       ],
     });
@@ -148,6 +157,7 @@ async function createTicket(interaction, { subject, details = null, product = nu
     number,
     userId: interaction.user.id,
     userTag: interaction.user.tag,
+    sellerId,
     subject,
     details,
     productId: product ? String(product._id) : null,
@@ -155,10 +165,10 @@ async function createTicket(interaction, { subject, details = null, product = nu
   });
 
   const welcome = await channel.send({
-    content: `<@${interaction.user.id}> <@&${cfg.staffRoleId}>`,
+    content: `<@${interaction.user.id}>${sellerId ? ` <@${sellerId}>` : ''} <@&${cfg.staffRoleId}>`,
     embeds: [ticketEmbed(ticket, cfg, product, null)],
     components: [controls()],
-    allowedMentions: { users: [interaction.user.id], roles: [cfg.staffRoleId] },
+    allowedMentions: { users: sellerId ? [interaction.user.id, sellerId] : [interaction.user.id], roles: [cfg.staffRoleId] },
   });
   ticket.controlMessageId = welcome.id;
   await ticket.save();
@@ -216,6 +226,7 @@ async function closeTicket(client, guild, channel, ticket, { closedBy, reason = 
       { name: 'Opened by', value: `<@${ticket.userId}> (${ticket.userTag})`, inline: true },
       { name: 'Closed by', value: `<@${closedBy.id}>`, inline: true },
       { name: 'Claimed by', value: ticket.claimedBy ? `<@${ticket.claimedBy}>` : 'Nobody', inline: true },
+      { name: 'Seller', value: ticket.sellerId ? `<@${ticket.sellerId}>` : '—', inline: true },
       { name: 'Subject', value: truncate(ticket.subject, 500), inline: true },
       { name: 'Product', value: ticket.productName ? truncate(ticket.productName, 200) : '—', inline: true },
       { name: 'Opened', value: ts(ticket.createdAt, 'f'), inline: true },
@@ -257,8 +268,17 @@ async function closeWithCountdown(interaction, ticket, reason) {
   await closeTicket(interaction.client, interaction.guild, interaction.channel, ticket, { closedBy: interaction.user, reason });
 }
 
+// Staff and the seller of the ticket can handle it (claim, add/remove members, rename).
+async function canHandle(interaction, ticket) {
+  if (ticket.sellerId && ticket.sellerId === interaction.user.id) return true;
+  const cfg = await getGuildConfig(interaction.guildId);
+  const member = interaction.member?.roles?.cache ? interaction.member : await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  return isStaff(member, cfg);
+}
+
 async function canManage(interaction, ticket) {
   if (ticket.userId === interaction.user.id) return true;
+  if (ticket.sellerId && ticket.sellerId === interaction.user.id) return true;
   const cfg = await getGuildConfig(interaction.guildId);
   const member = interaction.member?.roles?.cache ? interaction.member : await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
   return isStaff(member, cfg);
@@ -268,7 +288,7 @@ async function canManage(interaction, ticket) {
 async function claimTicket(interaction, ticket) {
   const cfg = await getGuildConfig(interaction.guildId);
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-  if (!isStaff(member, cfg)) return 'Only staff can claim tickets.';
+  if (!isStaff(member, cfg) && ticket.sellerId !== interaction.user.id) return 'Only staff or the seller of this ticket can claim it.';
   if (ticket.claimedBy) return `This ticket is already claimed by <@${ticket.claimedBy}>.`;
 
   ticket.claimedBy = interaction.user.id;
@@ -343,6 +363,7 @@ module.exports = {
   findOpenTicket,
   closeWithCountdown,
   canManage,
+  canHandle,
   claimTicket,
   controls,
   ticketEmbed,

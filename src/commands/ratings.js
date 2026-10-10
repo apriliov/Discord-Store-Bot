@@ -1,28 +1,32 @@
-const { SlashCommandBuilder, EmbedBuilder, InteractionContextType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags, InteractionContextType } = require('discord.js');
 const config = require('../config');
-const Product = require('../database/models/Product');
+const embeds = require('../utils/embeds');
 const Rating = require('../database/models/Rating');
 const { getGuildConfig } = require('../services/guildConfig');
 const { truncate, stars } = require('../utils/format');
+const { getSeller, productChoices } = require('../services/sellers');
 
 const data = new SlashCommandBuilder()
   .setName('ratings')
-  .setDescription('See the average rating of the store or a product')
+  .setDescription('See the average rating of the store, a product or a seller')
   .setContexts(InteractionContextType.Guild)
-  .addStringOption((o) => o.setName('product').setDescription('Show the rating of one product').setMaxLength(80).setAutocomplete(true));
+  .addStringOption((o) => o.setName('product').setDescription('Show the rating of one product').setMaxLength(80).setAutocomplete(true))
+  .addUserOption((o) => o.setName('seller').setDescription('Show the rating of one seller'));
 
 async function autocomplete(interaction) {
-  const typed = String(interaction.options.getFocused()).toLowerCase();
-  const products = await Product.find({ guildId: interaction.guildId }).sort({ number: 1 }).limit(200).lean();
-  return interaction.respond(
-    products.filter((p) => p.name.toLowerCase().includes(typed)).slice(0, 25).map((p) => ({ name: truncate(p.name, 100), value: truncate(p.name, 80) }))
-  );
+  return interaction.respond(await productChoices(interaction.guildId, interaction.options.getFocused()));
 }
 
 async function execute(interaction) {
   const cfg = await getGuildConfig(interaction.guildId);
   const product = interaction.options.getString('product');
-  const query = { guildId: interaction.guildId, ...(product ? { product } : {}) };
+  const sellerUser = interaction.options.getUser('seller');
+  let seller = null;
+  if (sellerUser) {
+    seller = await getSeller(interaction.guildId, sellerUser.id);
+    if (!seller) return interaction.reply({ embeds: [embeds.error(`${sellerUser} is not a seller of this store.`)], flags: MessageFlags.Ephemeral });
+  }
+  const query = { guildId: interaction.guildId, ...(product ? { product } : {}), ...(seller ? { sellerId: seller.userId } : {}) };
 
   const rows = await Rating.aggregate([{ $match: query }, { $group: { _id: '$stars', count: { $sum: 1 } } }]);
   const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -34,7 +38,8 @@ async function execute(interaction) {
     sum += r._id * r.count;
   }
 
-  const embed = new EmbedBuilder().setColor(config.colors.gold).setTitle(`⭐ Ratings - ${product ? truncate(product, 80) : cfg.storeName || config.storeName}`);
+  const subject = seller ? truncate(seller.displayName || sellerUser.username, 60) : cfg.storeName || config.storeName;
+  const embed = new EmbedBuilder().setColor(config.colors.gold).setTitle(`⭐ Ratings - ${product ? (seller ? `${truncate(product, 80)} (${subject})` : truncate(product, 80)) : subject}`);
   if (!total) {
     embed.setDescription('No ratings yet. Be the first with `/rate`!');
     return interaction.reply({ embeds: [embed] });

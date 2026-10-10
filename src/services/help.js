@@ -13,16 +13,18 @@ const CATEGORIES = {
     blurb: 'Browse, order, rate and review.',
     commands: [
       ['catalog [category]', 'Browse the products and order with one click.'],
-      ['rate <stars> [comment] [product]', 'Rate the store or one product (once per 24 hours).'],
-      ['ratings [product]', 'Show the average rating and the star breakdown.'],
-      ['testimonial submit <product> <message> [image]', 'Share your experience (customers only by default).'],
+      ['rate <stars> [comment] [product] [seller]', 'Rate the store, a product or a seller (once per 24 hours).'],
+      ['ratings [product] [seller]', 'Show the average rating and the star breakdown.'],
+      ['testimonial submit <product> <message> [image] [seller]', 'Share your experience (customers only by default).'],
+      ['seller list', 'See all sellers with their testimonials and ratings.'],
+      ['seller info [user]', 'See a seller\'s testimonials, rating and products.'],
     ],
   },
   tickets: {
     emoji: '🎫',
     label: 'Tickets',
-    who: 'Everyone / Staff',
-    blurb: 'Press **Open Ticket** on the ticket panel to talk to the team.',
+    who: 'Everyone / Staff / Seller',
+    blurb: 'Press **Open Ticket** on the ticket panel to talk to the team. The seller of an ordered product can handle that ticket.',
     commands: [
       ['ticket close [reason]', 'Close the current ticket (owner or staff).'],
       ['ticket claim', 'Claim the current ticket. Staff only.'],
@@ -34,8 +36,8 @@ const CATEGORIES = {
   customers: {
     emoji: '🛒',
     label: 'Customers',
-    who: 'Staff',
-    blurb: 'Give the customer role and track purchases.',
+    who: 'Staff / Sellers',
+    blurb: 'Give the customer role and track purchases. Sellers can only use `customer add` for their own products.',
     commands: [
       ['customer add <user> [product] [note]', 'Give the customer role, count the sale and lower the stock.'],
       ['customer remove <user>', 'Remove the customer role.'],
@@ -47,15 +49,25 @@ const CATEGORIES = {
   products: {
     emoji: '📦',
     label: 'Products',
-    who: 'Admin',
-    blurb: 'Manage what the store sells.',
+    who: 'Admin / Sellers',
+    blurb: 'Manage what the store sells. Sellers only see and change their own products.',
     commands: [
-      ['product add <name> <price> [description] [category] [stock] [image-url]', 'Add a product.'],
-      ['product edit <id> [name] [price] [description] [category] [image-url]', 'Edit a product.'],
+      ['product add <name> <price> [description] [category] [stock] [image-url] [seller]', 'Add a product (`seller` is admin only).'],
+      ['product edit <id> [name] [price] [description] [category] [image-url] [seller]', 'Edit a product (`seller` is admin only).'],
       ['product stock <id> <amount>', 'Set the stock (-1 = unlimited).'],
       ['product remove <id>', 'Remove a product.'],
       ['product info <id>', 'Show one product.'],
       ['product list', 'List all products.'],
+    ],
+  },
+  sellers: {
+    emoji: '🧑‍💼',
+    label: 'Sellers',
+    who: 'Admin',
+    blurb: 'Let members sell their own products in your store.',
+    commands: [
+      ['seller add <user> [name]', 'Make a member a seller. They get their own products, ratings and testimonials.'],
+      ['seller remove <user> [delete-products]', 'Remove a seller. Their products become store products unless you delete them.'],
     ],
   },
   setup: {
@@ -78,9 +90,14 @@ const CATEGORIES = {
   posting: {
     emoji: '📣',
     label: 'Posting',
-    who: 'Staff',
+    who: 'Staff / Sellers',
     blurb: 'Send announcements as the bot.',
-    commands: [['post <channel> <message> [title] [color] [image]', 'Post an embed in a channel with an optional title, hex color and image.']],
+    commands: [
+      ['post <channel> <message> [title] [color] [image]', 'Post an embed in a channel with an optional title, hex color and image.'],
+      ['announcement list', 'List your posts (staff see all posts).'],
+      ['announcement edit <id> [message] [title] [color] [image-url]', 'Edit a post. Sellers can only edit their own posts.'],
+      ['announcement delete <id>', 'Delete a post. Sellers can only delete their own posts.'],
+    ],
   },
 };
 
