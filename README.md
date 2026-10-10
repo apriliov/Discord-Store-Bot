@@ -2,7 +2,7 @@
 
 # Store Bot
 
-An all-in-one Discord bot for **online stores and selling communities**.
+Discord bot for **online stores and selling communities**.
 Tickets, verification, join/leave logs, customer roles, testimonials, ratings, a product catalog and announcement posts, with **slash commands**, **prefix commands** and **MongoDB** storage.
 Only the official bot token and the official Discord API are used (no self-bots, no user tokens).
 
