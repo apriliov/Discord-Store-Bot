@@ -2,7 +2,7 @@
 
 # Store Bot
 
-Discord bot for **online stores and selling communities**.
+An all-in-one Discord bot for **online stores and selling communities**.
 Tickets, verification, join/leave logs, customer roles, testimonials, ratings, a product catalog and announcement posts, with **slash commands**, **prefix commands** and **MongoDB** storage.
 Only the official bot token and the official Discord API are used (no self-bots, no user tokens).
 
@@ -25,6 +25,7 @@ Need help or found a bug? Join our Discord server at https://support.namaiki.xyz
   - [Ratings](#ratings)
   - [Product catalog](#product-catalog)
   - [Posting announcements](#posting-announcements)
+  - [Multi-seller](#multi-seller)
 - [Permissions](#permissions)
 - [Troubleshooting](#troubleshooting)
 - [Project structure](#project-structure)
@@ -43,7 +44,8 @@ Need help or found a bug? Join our Discord server at https://support.namaiki.xyz
 - **Testimonials:** customers post a review with an optional proof screenshot, shown in a testimonial channel.
 - **Rating:** `/rate` for the store or a product, an automatic star-rating request by DM when a ticket closes, and an average score with a star breakdown.
 - **Product catalog:** products with price, stock, category and image, a paged catalog with a select menu, and a one-click *Order Now* button that opens a ticket for that product.
-- **Post command:** send announcement embeds to any channel with an optional title, color and image.
+- **Multi-seller:** admins appoint members as sellers. Each seller manages only their own products, can post announcements, handles the tickets of their products and has their own ratings and testimonials that anyone can check with `/seller info` (testimonial count, rating, sales and product list in one place).
+- **Post command:** send announcement embeds to any channel with an optional title, color and image. The author (or staff) can edit or delete a post later with `/announcement`.
 - **Prefix commands:** every command also works with a prefix (default `!`).
 - **Clean help menu:** `/help` groups all commands into sections with a select menu.
 - **Automatic slash command sync** on every start.
@@ -144,10 +146,12 @@ Commands marked **Admin** need the **Manage Server** permission. Commands marked
 | Command | Description |
 | --- | --- |
 | `/catalog [category]` | Browse the product catalog and order. |
-| `/rate stars [comment] [product]` | Rate the store or one product (once per 24 hours per target). |
-| `/ratings [product]` | Show the average rating and the star breakdown. |
-| `/testimonial submit product message [image]` | Post a testimonial (customers only by default). |
-| `/ticket close [reason]` | Close the ticket you are in (ticket owner or staff). |
+| `/rate stars [comment] [product] [seller]` | Rate the store, a product or a seller (once per 24 hours per target). |
+| `/ratings [product] [seller]` | Show the average rating and the star breakdown. |
+| `/testimonial submit product message [image] [seller]` | Post a testimonial (customers only by default). |
+| `/ticket close [reason]` | Close the ticket you are in (ticket owner, staff or the ticket's seller). |
+| `/seller list` | Show all sellers with their testimonials and ratings. |
+| `/seller info [user]` | Show a seller's testimonials, rating, sales and product list. |
 | `/help [section]` | Show all commands, grouped by section. |
 
 ### Staff
@@ -164,11 +168,26 @@ Commands marked **Admin** need the **Manage Server** permission. Commands marked
 | `/customer top` | Show the top 10 customers. |
 | `/testimonial delete number` | Delete a testimonial. |
 | `/post channel message [title] [color] [image]` | Post an announcement embed in a channel. |
+| `/announcement list / edit / delete` | List, edit or delete any post made with `/post`. |
+
+### Sellers
+
+A seller is a member an admin added with `/seller add`. Sellers can use these commands, always limited to their own products:
+
+| Command | Description |
+| --- | --- |
+| `/product add / edit / stock / remove / info / list` | Manage only their own products. They never see or change the products of other sellers. |
+| `/post channel message [title] [color] [image]` | Post an announcement (only in channels the seller can write in, shown as "Posted by ..."). |
+| `/announcement list / edit / delete` | Edit or delete only the posts they made themselves. |
+| `/customer add user product [note]` | Record a sale of one of their own products (gives the customer role, lowers the stock). |
+| `/ticket claim / add / remove / rename / close` | Handle the tickets that were opened for their products. |
 
 ### Admin
 
 | Command | Description |
 | --- | --- |
+| `/seller add user [name]` | Make a member a seller (the optional name is the shop name shown to buyers). |
+| `/seller remove user [delete-products]` | Remove a seller. Their products become store products, or are deleted with `delete-products:true`. |
 | `/setup ticket` | Ticket category, staff role, transcript channel, max open tickets per member. |
 | `/setup verification` | Verified role, unverified role and mode (button or captcha). |
 | `/setup joinleave` | Join/leave log channel. |
@@ -178,8 +197,8 @@ Commands marked **Admin** need the **Manage Server** permission. Commands marked
 | `/setup store` | Store name and currency. |
 | `/setup view` | Show the current configuration. |
 | `/panel ticket` / `verify` / `catalog` | Post a panel in a channel (custom title, text, color and banner are optional). |
-| `/product add` | Add a product (name, price, description, category, stock, image link). |
-| `/product edit` | Edit a product. |
+| `/product add` | Add a product (name, price, description, category, stock, image link). Use `seller:` to give it to a seller. |
+| `/product edit` | Edit a product. Use `seller:` to move it to another seller. |
 | `/product stock` | Set the stock (`-1` means unlimited). |
 | `/product remove` | Remove a product. |
 | `/product info` / `list` | Show one product or all products. |
@@ -268,6 +287,28 @@ Customers run `/testimonial submit product:... message:... image:...`. The bot p
 - **Order Now** opens a ticket for that product. Products with 0 stock cannot be ordered.
 - Only you see your own catalog view, so many people can browse at the same time.
 
+### Multi-seller
+
+Use this when several people sell in the same server.
+
+1. An admin appoints a seller: `/seller add user:@Ali name:Ali Shop`.
+2. The seller adds products: `/product add name:Netflix Premium price:25000`. The product is automatically theirs and shows the seller in `/catalog`.
+3. A buyer presses **Order Now**. The ticket is created with the seller added to it, so the seller can claim it, talk to the buyer and close it. Staff can still see every ticket.
+4. After the sale the seller runs `/customer add user:@Buyer product:Netflix Premium`.
+5. The buyer can leave a testimonial or a rating about the seller with `/testimonial submit ... seller:@Ali` or `/rate stars:5 seller:@Ali`. If the product has only one seller, the seller is picked automatically from the product name. After a ticket closes, the rating DM is also counted for the seller of that ticket.
+6. The seller can announce offers with `/post` and later fix or remove them with `/announcement edit` and `/announcement delete`. This only works on their own posts.
+7. Anyone can check a seller with `/seller info user:@Ali` (number of testimonials, average rating, sales and the full product list) or compare all sellers with `/seller list`.
+
+Rules that keep sellers apart:
+
+- A seller can only see, edit, change the stock of or remove their own products. Admins can manage all products.
+- A seller can only edit or delete their own announcement posts.
+- A seller cannot rate or write a testimonial about themselves.
+- Only admins and staff can delete testimonials, so sellers cannot remove feedback about themselves.
+- Ratings and testimonials are kept per seller. If a seller is removed, their history is kept.
+
+Note: `/product`, `/seller add` and `/seller remove` are visible to everyone in the command list, but the bot refuses people who are not allowed. To hide them, use **Server Settings -> Integrations -> the bot** and limit the commands to a role.
+
 ### Posting announcements
 
 Staff can post as the bot: `/post channel:#news message:Big sale today! title:Sale color:#ff0000 image:(upload)`.
@@ -276,6 +317,7 @@ Staff can post as the bot: `/post channel:#news message:Big sale today! title:Sa
 - Write `\n` in the message for a new line.
 - Uploaded images are re-uploaded by the bot, so they do not expire.
 - You can only post in channels where you can send messages yourself (admins can post anywhere the bot can).
+- Every post gets a number. Use `/announcement list` to see your posts, `/announcement edit id:3 message:New text` to change one and `/announcement delete id:3` to remove it. Sellers can only change their own posts, staff can change all of them.
 
 ---
 
@@ -311,13 +353,13 @@ The bot needs these server permissions: Manage Roles, Manage Channels, View Chan
 src/
   index.js            entry point
   config.js           environment based configuration
-  commands/           one file per command (setup, panel, post, ticket, product, catalog, customer, testimonial, rate, ratings, help)
+  commands/           one file per command (setup, panel, post, announcement, ticket, product, catalog, customer, seller, testimonial, rate, ratings, help)
   core/               prefix command parser (turns text commands into the same code path as slash commands)
-  database/           MongoDB connection and models (GuildConfig, Product, Ticket, Customer, Testimonial, Rating)
+  database/           MongoDB connection and models (GuildConfig, Product, Ticket, Customer, Testimonial, Rating, Seller, Announcement)
   events/             Discord event handlers (ready, interactionCreate, messageCreate, guildMemberAdd/Remove, channelDelete)
   handlers/           command and event loaders
   scripts/            deploy-commands.js (npm run deploy)
-  services/           tickets, verification, catalog, ratings, help, slash command sync, guild config
+  services/           tickets, verification, catalog, ratings, sellers, help, slash command sync, guild config
   utils/              banner, embeds, formatting, permissions and transcript helpers
 ```
 
