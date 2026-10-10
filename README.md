@@ -1,3 +1,5 @@
+<p align="center"> <img src="./1000360832.png" alt="Store Bot - Discord Store & Community Management" width="100%"> </p>
+
 # Store Bot
 
 An all-in-one Discord bot for **online stores and selling communities**.
