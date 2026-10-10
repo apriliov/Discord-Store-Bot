@@ -1,0 +1,20 @@
+{
+  "name": "store-bot",
+  "version": "2.0.0",
+  "description": "All-in-one Discord store bot: tickets, verification, join/leave log, customer role, testimonials, ratings and a product catalog.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/scripts/deploy-commands.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.7.0"
+  },
+  "author": "APRILIOV",
+  "license": "SEE LICENSE IN LICENSE"
+}
